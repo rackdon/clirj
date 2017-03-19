@@ -1,2 +1,2 @@
 # clirj
-Simple IRC made in Clojure
+Simple Chat made in Clojure
