@@ -15,15 +15,17 @@
     (server/with-channel request browser-connection
 
                          (core/add-user user browser-connection)
+                         (go (>! root-chan (format "{:connect %s}" user)))
                          (server/on-close browser-connection
                                           (fn [status]
                                             (core/delete-user user)
                                             (async/untap mlt cha)
                                             (async/close! cha)
+                                            (go (>! root-chan (format "{:disconnect %s}" user)))
                                             (prn "channel closed: " status)))
                          (server/on-receive browser-connection (fn [data]
                                                                  (go
-                                                                   (>! root-chan data))))
+                                                                   (>! root-chan (format "{:message %s}" data)))))
 
                          (go-loop
                            []

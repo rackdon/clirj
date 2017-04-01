@@ -1,33 +1,43 @@
 (ns clirj.core
   (:require [reagent.core :as r]
-            [cljs.core.async :refer [<!]]
+            [clirj.net :as net]
+            [cljs.core.async :refer [<! put! chan]]
             [cljs-http.client :as http])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (enable-console-print!)
 
 (def web-socket (atom nil))
-(def ws-messages (atom "My messages"))
+(def ws-messages (r/atom []))
+(def members (r/atom #{}))
+
+(defn manage-events
+  [event-data]
+  (cond
+    (:connect event-data) (swap! members conj (:connect event-data))
+    (:disconnect event-data) (swap! members disj (:disconnect event-data))
+    (:message event-data) (swap! ws-messages conj (:message event-data))))
+
+
 
 (defn make-websocket
   [name]
-  (when-let [chan (js/WebSocket. (str "ws://localhost:8080/connect/" name))]
-    (set! (.-onmessage chan) #(do (js/console.dir (.-data %)) (reset! ws-messages (.-data %))))
-    (reset! web-socket chan)))
+  (let [ws (js/WebSocket. (str "ws://localhost:8080/connect/" name))
+             get-chan (chan)]
+    (set! (.-onopen ws) #(prn "Connection open"))
+    (set! (.-onclose ws) (fn [ev]
+                           (prn "Connection closed")
+                           (reset! members #{})
+                           (reset! web-socket nil)))
+    (set! (.-onmessage ws) #(manage-events (cljs.reader/read-string (.-data %))))
+    (reset! web-socket ws)
+    (net/list-members get-chan)
+    (go
+      (reset! members (<! get-chan)))
+    ))
 
-(defn make-request
-  [url]
-  (go
-    (let [response (<! (http/get url {:with-credentials? false}))]
-      (prn (:body response)))))
 
-(defn disconnect-irc
-  []
-  [:button {:on-click #(make-request (str "http://localhost:8080/disconnect/" @name))} "Disconnect"])
 
-(defn list-members
-  []
-  [:button {:on-click #(make-request "http://localhost:8080/list")} "List members"])
 
   (defn main-irc
     []
@@ -36,11 +46,11 @@
        [:div
         [:h3 "Join to IRC"]
         [:input {:on-change #(reset! name (-> % .-target .-value))}]
-        [:button {:on-click #(make-websocket @name)} "Join"]]
+        [:button {:on-click #(when @name (make-websocket @name))} "Join"]]
        [:div
-        [:button {:on-click #(make-request (str "http://localhost:8080/disconnect/" @name))} "Ban user"]
-        [:button {:on-click #(.close @web-socket)} "Disconnect"]
-        (list-members)]]))
+        [:button {:on-click #(when @name (net/ban-member @name))} "Ban user"]
+        [:button {:on-click #(when @web-socket (.close @web-socket))} "Disconnect"]
+        ]]))
 
 
 (defn messages
@@ -56,18 +66,24 @@
      [:button {:on-click #(when (= (.-readyState @web-socket) 1) (.send @web-socket @message))} "Send"]]))
 
 (defn messages-list []
-  [:p @ws-messages])
-
-(defn irc []
   [:div
-   [main-irc]
-   [messages]
-   [send-message]
-   [messages-list]
-   [:button {:on-click #(prn @ws-messages)} "Show messages"]
-   ])
+   (for [message @ws-messages]
+     [:p message])])
 
-(r/render-component [irc]
+(defn main []
+  [:div
+   [:div
+    [main-irc]
+    [messages]
+    [messages-list]
+    [send-message]
+    ]
+   [:div
+    [:h3 "Members"]
+    (for [member (seq @members)]
+      [:p member])]])
+
+(r/render-component [main]
                     (. js/document (getElementById "app")))
 
 (defn on-js-reload []
