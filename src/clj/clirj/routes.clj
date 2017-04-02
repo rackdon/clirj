@@ -8,7 +8,7 @@
             [ring.util.http-response :as http-response]
             [ring.middleware.reload :as reload]
             [ring.middleware.cors :refer [wrap-cors]]
-            [clirj.core :as core]
+            [clirj.users :as users]
             [clirj.ws :as ws]))
 
 (compojure-api/defapi
@@ -21,16 +21,17 @@
 
   (GET "/connect/:user" [user]
         (fn [request]
-          (if (core/get-user user)
+          (if (users/get user)
             (http-response/conflict)
             (ws/handle request user))))
 
   (GET "/disconnect/:user" [user]
-        (core/disconnect-user user)
-        (http-response/no-content))
+    (when-let [user-chan (users/get user)]
+      (ws/disconnect user-chan))
+    (http-response/no-content))
 
   (GET "/list" []
-       (http-response/ok (core/list-users)))
+    (http-response/ok (users/list)))
 
   )
 
