@@ -22,6 +22,7 @@
                  ;; ClojureScript
                  [reagent "0.6.0"]
                  [cljs-http "0.1.42"]
+                 [re-frame "0.9.2"]
                  ]
 
   :plugins [[lein-figwheel "0.5.9"]
@@ -41,7 +42,7 @@
                 ;; the presence of a :figwheel configuration here
                 ;; will cause figwheel to inject the figwheel client
                 ;; into your build
-                :figwheel {:on-jsload "clirj.core/on-js-reload"
+                :figwheel {:on-jsload "clirj.core/run"
                            ;; :open-urls will pop open your application
                            ;; in the default browser once Figwheel has
                            ;; started and complied your application.
